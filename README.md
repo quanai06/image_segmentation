@@ -8,15 +8,17 @@ Paper nền để tái tạo giao thức: **FCBFormer** — Sanderson & Matuszew
 
 ```
 image_segmentation/
-├── configs/          # cấu hình YAML (datasets.yaml, data.yaml)
+├── configs/          # cấu hình YAML (datasets.yaml, data.yaml, sam.yaml)
 ├── data/             # raw/, processed/ (không lên Git), splits/, metadata/ (có trên Git)
-├── src/medseg/       # package Python: paths, config, data/
-├── scripts/          # tải, chuẩn hóa, chia tập, kiểm tra dữ liệu
+├── src/medseg/       # package Python: paths, config, data/, evaluation/, sam/
+├── scripts/          # dữ liệu, SAM zero-shot, tổng hợp kết quả
 ├── tests/            # pytest
 ├── docs/             # tài liệu kỹ thuật cho nhóm
 ├── report/           # báo cáo, hình, bảng
-├── notebooks/        # thử nghiệm nhanh
-└── outputs/          # checkpoint, log (không lên Git)
+├── notebooks/        # notebook Colab
+├── checkpoints/      # trọng số mô hình (không lên Git)
+├── logs/             # log mỗi lần chạy script: <script>_<ngày-giờ>.log (không lên Git)
+└── outputs/          # kết quả chạy (không lên Git)
 ```
 
 Mọi đường dẫn tính từ gốc repo (`medseg.paths.ROOT`), không dùng đường dẫn tuyệt đối của máy cá nhân.
@@ -37,7 +39,7 @@ python scripts/download_data.py    # tải Kvasir-SEG, CVC-ClinicDB + kiểm tra
 python scripts/prepare_data.py     # chuẩn hóa -> data/processed/<dataset>/256/
 python scripts/make_splits.py      # chia 80/10/10 theo FCBFormer -> data/splits/
 python scripts/check_data.py       # kiểm tra + thống kê -> report/
-pytest -q                          # 19 test
+pytest -q
 ```
 
 Giải nén `.rar` của CVC-ClinicDB cần `bsdtar` (có sẵn trên macOS) hoặc `unrar` (Colab: `apt install unrar`).
@@ -54,4 +56,16 @@ cross_loader = build_dataloader("cvc_clinicdb", "all")       # test chuyển mi�
 
 Mỗi batch: `image` (B, 3, 256, 256) đã chuẩn hóa ImageNet, `mask` (B, 1, 256, 256) giá trị {0, 1}, `name`.
 
-Chi tiết: [docs/data_pipeline.md](docs/data_pipeline.md) · Báo cáo phần dữ liệu: [report/report.md](report/report.md)
+Metric dùng chung: `medseg.evaluation.segmentation_metrics(pred, gt)` trả Dice, IoU, precision, recall, HD95 cho từng ảnh.
+
+## SAM zero-shot
+
+```bash
+python scripts/download_sam_weights.py --models vit_b
+python scripts/run_sam_zeroshot.py --model vit_b --split test --save-masks
+python scripts/summarize_sam.py
+```
+
+Chạy vit_h trên GPU: `notebooks/sam_colab.ipynb`.
+
+Chi tiết: [docs/data_pipeline.md](docs/data_pipeline.md) · [docs/sam.md](docs/sam.md) · Báo cáo: [report/report.md](report/report.md)

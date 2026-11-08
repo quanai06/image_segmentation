@@ -2,6 +2,7 @@
 torch>=2.4
 torchvision>=0.19
 
+segment-anything==1.0
 albumentations==2.0.8
 opencv-python-headless==5.0.0.93
 tifffile==2026.10.15

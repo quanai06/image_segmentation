@@ -18,3 +18,8 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+
+checkpoints/*
+!checkpoints/.gitkeep
+logs/*
+!logs/.gitkeep

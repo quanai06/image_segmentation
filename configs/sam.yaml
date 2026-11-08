@@ -1,0 +1,35 @@
+checkpoints_dir: checkpoints
+
+models:
+  vit_b:
+    url: https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+    file: sam_vit_b_01ec64.pth
+    bytes: 375042383
+    sha256: ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912
+  vit_l:
+    url: https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth
+    file: sam_vit_l_0b3195.pth
+    bytes: 1249524607
+    sha256: null
+  vit_h:
+    url: https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+    file: sam_vit_h_4b8939.pth
+    bytes: 2564550879
+    sha256: null
+
+prompts:
+  min_region_area: 0.001    # bỏ vùng < 0.1% diện tích ảnh (chấm nhiễu của mặt nạ JPEG)
+  n_pos: 3                  # P2: điểm dương (gồm điểm tâm)
+  n_neg: 3                  # P2: điểm âm, lấy trong hộp nới rộng quanh tổn thương
+  neg_margin: 0.5           # nới mỗi cạnh hộp thêm 50% kích thước
+  jitter_px: 20             # P4a: lệch mỗi cạnh hộp tối đa 20 px (như MedSAM)
+  jitter_rel: 0.1           # P4b: lệch tối đa 10% kích thước hộp
+
+automatic:                  # P0: SamAutomaticMaskGenerator, tham số mặc định của SAM
+  points_per_side: 32
+  pred_iou_thresh: 0.88
+  stability_score_thresh: 0.95
+
+eval_size: 256
+size_bins: [0.05, 0.20]     # nhỏ < 5% <= vừa < 20% <= lớn
+seed: 0

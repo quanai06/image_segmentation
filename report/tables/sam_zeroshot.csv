@@ -1,0 +1,13 @@
+model,dataset,split,protocol,n,dice_mean,dice_std,iou_mean,iou_std,precision,recall,hd95_mean,hd95_nan,empty_pred_pct,sec_image
+vit_b,cvc_clinicdb,test,point_top,61,0.4249,0.35,0.346,0.3523,0.4616,0.88,89.8012,0,0.0,2.7315
+vit_b,cvc_clinicdb,test,point_oracle,61,0.7798,0.2409,0.6906,0.2681,0.78,0.8945,33.2056,0,0.0,2.7315
+vit_b,cvc_clinicdb,test,points,61,0.7982,0.1981,0.7027,0.2398,0.766,0.9139,31.4443,0,0.0,2.7315
+vit_b,cvc_clinicdb,test,box_jitter_px,61,0.8286,0.1893,0.7397,0.207,0.9386,0.768,15.6268,0,0.0,2.7315
+vit_b,cvc_clinicdb,test,box_jitter_rel,61,0.8907,0.1501,0.8245,0.1654,0.9648,0.8504,12.5677,0,0.0,2.7315
+vit_b,cvc_clinicdb,test,box,61,0.8985,0.1504,0.8374,0.1637,0.9575,0.87,11.3301,0,0.0,2.7315
+vit_b,kvasir_seg,test,point_top,100,0.5212,0.3623,0.4382,0.3576,0.6496,0.7834,69.3875,0,0.0,3.1436
+vit_b,kvasir_seg,test,point_oracle,100,0.8472,0.1774,0.7662,0.2084,0.8715,0.8816,28.5348,0,0.0,3.1436
+vit_b,kvasir_seg,test,points,100,0.8257,0.166,0.7309,0.2008,0.8607,0.8505,29.6946,0,0.0,3.1436
+vit_b,kvasir_seg,test,box_jitter_px,100,0.9046,0.1244,0.8418,0.1437,0.9685,0.8604,14.3111,0,0.0,3.1436
+vit_b,kvasir_seg,test,box_jitter_rel,100,0.8896,0.1298,0.8193,0.1585,0.9666,0.8407,16.2148,0,0.0,3.1436
+vit_b,kvasir_seg,test,box,100,0.9058,0.1478,0.8482,0.1552,0.9565,0.8656,14.9541,0,0.0,3.1436
