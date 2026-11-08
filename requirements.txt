@@ -1,0 +1,16 @@
+# torch/torchvision để >= để Colab/Kaggle giữ bản GPU có sẵn
+torch>=2.4
+torchvision>=0.19
+
+albumentations==2.0.8
+opencv-python-headless==5.0.0.93
+tifffile==2026.10.15
+numpy==2.5.4
+pillow==13.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+pandas==3.1.1
+matplotlib==3.11.2
+PyYAML==6.0.3
+tqdm==4.70.1
+pytest==9.2.0

@@ -1,0 +1,5 @@
+,orig_width,orig_width,orig_width,orig_height,orig_height,orig_height
+,min,median,max,min,median,max
+dataset,,,,,,
+cvc_clinicdb,384,384.0,384,288,288.0,288
+kvasir_seg,332,621.0,1920,352,530.0,1072

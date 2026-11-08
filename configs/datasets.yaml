@@ -1,0 +1,23 @@
+# Đặc tả các bộ dữ liệu. Mọi đường dẫn tính từ gốc repo.
+
+kvasir_seg:
+  url: https://datasets.simula.no/downloads/kvasir-seg.zip
+  archive: data/raw/archives/kvasir-seg.zip
+  sha256: 03b30e21d584e04facf49397a2576738fd626815771afbbf788f74a7153478f7
+  extract_to: data/raw/kvasir_seg
+  raw_images: data/raw/kvasir_seg/Kvasir-SEG/images
+  raw_masks: data/raw/kvasir_seg/Kvasir-SEG/masks
+  split:
+    protocol: fcbformer   # 80/10/10, train_test_split(random_state=42)
+    seed: 42
+
+cvc_clinicdb:
+  url: https://www.dropbox.com/s/p5qe9eotetjnbmq/CVC-ClinicDB.rar?dl=1
+  archive: data/raw/archives/CVC-ClinicDB.rar
+  sha256: 79b8105a667ff6973164fdc8ac7726fae83aa620e5215b6d089f59d76443f453
+  extract_to: data/raw/cvc_clinicdb
+  raw_images: data/raw/cvc_clinicdb/CVC-ClinicDB/Original
+  raw_masks: data/raw/cvc_clinicdb/CVC-ClinicDB/Ground Truth
+  split:
+    protocol: fcbformer
+    seed: 42

@@ -1,0 +1,16 @@
+# Cấu hình pipeline dữ liệu dùng chung cho cả nhóm.
+
+image_size: 256          # ảnh và mặt nạ đã resize sẵn về 256 x 256
+processed_dir: data/processed
+splits_dir: data/splits
+
+mask_threshold: 127      # pixel > 127 là tổn thương
+
+normalize: imagenet      # imagenet (encoder pretrained) | fcbformer (mean=std=0.5)
+
+augment: fcbformer       # fcbformer | none
+
+loader:
+  batch_size: 16
+  num_workers: 2
+  seed: 42
