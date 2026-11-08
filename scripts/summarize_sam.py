@@ -106,6 +106,11 @@ def plot_examples(df: pd.DataFrame, model: str, dataset: str, split: str, size: 
     if "box" not in prots:
         return False
     box = df[(df.model == model) & (df.dataset == dataset) & (df.split == split) & (df.protocol == "box")]
+    has_masks = box["name"].map(lambda n: all((mask_dir / p / f"{n}.png").exists() for p in prots))
+    box = box[has_masks]
+    if len(box) < 4:
+        log.info(f"  bỏ qua hình ví dụ {dataset} ({model}): chưa đủ ảnh có mặt nạ đã lưu")
+        return False
     ranked = box.sort_values("dice")
     picks = list(ranked.tail(2).name[::-1]) + list(ranked.head(2).name)
     root = processed_root(dataset, size)

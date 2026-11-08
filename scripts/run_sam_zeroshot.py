@@ -1,9 +1,10 @@
 """SAM zero-shot với gợi ý sinh từ nhãn, chấm trên lưới eval_size (256) như các mô hình khác.
 
 SAM chạy trên ảnh gốc; mặt nạ dự đoán được thu về 256 x 256 rồi so với nhãn trong data/processed.
-Ghi từng ảnh vào CSV nên chạy lại sẽ tiếp tục từ chỗ dừng (dùng --overwrite để chạy lại từ đầu).
+Ghi từng ảnh vào CSV; chạy lại chỉ làm các cặp (ảnh, kiểu gợi ý) còn thiếu
+(với --save-masks: thiếu file mặt nạ cũng tính là thiếu). --overwrite để chạy lại từ đầu.
 
-    python scripts/run_sam_zeroshot.py --model vit_b --limit 5
+    python scripts/run_sam_zeroshot.py --model vit_b --limit 3 --dry-run   # thử, không ghi gì
     python scripts/run_sam_zeroshot.py --model vit_h --split all --save-masks
 
 Kết quả: outputs/sam/<model>/<dataset>_<split>/per_image.csv và masks/<protocol>/<tên>.png
@@ -38,28 +39,52 @@ def size_bin(fg: float, bins: list[float]) -> str:
     return "small" if fg < bins[0] else "medium" if fg < bins[1] else "large"
 
 
+def mask_path(out_dir: Path, protocol: str, name: str) -> Path:
+    return out_dir / "masks" / protocol / f"{name}.png"
+
+
+def load_done(csv_path: Path, out_dir: Path, save_masks: bool) -> set[tuple[str, str]]:
+    """Các cặp (ảnh, kiểu gợi ý) đã xong; dòng thiếu file mặt nạ bị xóa khỏi CSV để chạy lại."""
+    if not csv_path.exists():
+        return set()
+    done = pd.read_csv(csv_path, dtype={"name": str})
+    if save_masks:
+        complete = [mask_path(out_dir, p, n).exists() for n, p in zip(done["name"], done["protocol"])]
+        if not all(complete):
+            log.info(f"  {len(complete) - sum(complete)} dòng thiếu file mặt nạ -> chạy lại")
+            done = done[complete]
+            done.to_csv(csv_path, index=False)
+    return set(zip(done["name"], done["protocol"]))
+
+
 def run_dataset(runner: SamZeroShot, args, dataset: str, cfg: dict, threshold: int) -> None:
     size = cfg["eval_size"]
     manifest = pd.read_csv(DATA / "metadata" / f"{dataset}_manifest.csv", dtype={"name": str}).set_index("name")
     names = load_split(dataset, args.split)[: args.limit]
     out_dir = OUTPUTS / "sam" / args.model / f"{dataset}_{args.split}"
     csv_path = out_dir / "per_image.csv"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if args.overwrite and csv_path.exists():
-        csv_path.unlink()
-    done = set(pd.read_csv(csv_path, dtype={"name": str})["name"]) if csv_path.exists() else set()
-    todo = [n for n in names if n not in done]
-    log.info(f"[{dataset}/{args.split}] {len(todo)} ảnh cần chạy ({len(done)} đã có) -> {csv_path.relative_to(OUTPUTS.parent)}")
+    if args.dry_run:
+        done = set()
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if args.overwrite and csv_path.exists():
+            csv_path.unlink()
+        done = load_done(csv_path, out_dir, args.save_masks)
+    todo = {n: [p for p in args.protocols if (n, p) not in done] for n in names}
+    todo = {n: ps for n, ps in todo.items() if ps}
+    target = "chạy thử, không ghi file" if args.dry_run else csv_path.relative_to(OUTPUTS.parent)
+    log.info(f"[{dataset}/{args.split}] {len(todo)}/{len(names)} ảnh còn thiếu kết quả -> {target}")
 
     gt_dir = processed_root(dataset, size) / "masks"
-    for name in tqdm(todo, desc=dataset):
+    dry_rows = []
+    for name, protocols in tqdm(todo.items(), desc=dataset):
         meta = manifest.loc[name]
         image = read_image(from_root(meta.raw_image))
         gt_raw = read_mask(from_root(meta.raw_mask), threshold)
         gt = cv2.imread(str(gt_dir / f"{name}.png"), cv2.IMREAD_GRAYSCALE) > 127
 
         start = time.perf_counter()
-        preds = runner.predict(image, gt_raw, args.protocols, seed=cfg["seed"] + zlib.crc32(name.encode()))
+        preds = runner.predict(image, gt_raw, protocols, seed=cfg["seed"] + zlib.crc32(name.encode()))
         seconds = time.perf_counter() - start
 
         rows = []
@@ -73,14 +98,19 @@ def run_dataset(runner: SamZeroShot, args, dataset: str, cfg: dict, threshold: i
                 "n_regions": len(regions(gt_raw, cfg["prompts"]["min_region_area"])),
                 "sec_image": round(seconds, 3),
             })
-            if args.save_masks:
-                path = out_dir / "masks" / protocol / f"{name}.png"
+            if args.save_masks and not args.dry_run:
+                path = mask_path(out_dir, protocol, name)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 cv2.imwrite(str(path), pred.astype("uint8") * 255)
-        pd.DataFrame(rows).to_csv(csv_path, mode="a", header=not csv_path.exists(), index=False)
         log.debug(f"{name} {seconds:.2f}s " + " ".join(f"{r['protocol']}={r['dice']:.3f}" for r in rows))
+        if args.dry_run:
+            dry_rows += rows
+        else:
+            pd.DataFrame(rows).to_csv(csv_path, mode="a", header=not csv_path.exists(), index=False)
 
-    results = pd.read_csv(csv_path, dtype={"name": str})
+    results = pd.DataFrame(dry_rows) if args.dry_run else pd.read_csv(csv_path, dtype={"name": str})
+    if results.empty:
+        return
     results = results[results["name"].isin(names) & results["protocol"].isin(args.protocols)]
     summary = results.groupby("protocol")["dice"].agg(["mean", "std", "size"]).round(3)
     log.info(f"[{dataset}/{args.split}] Dice theo kiểu gợi ý ({len(set(results['name']))} ảnh):\n{summary.to_string()}")
@@ -97,6 +127,7 @@ def main() -> None:
     parser.add_argument("--device", default=None, help="cuda | cpu | mps")
     parser.add_argument("--save-masks", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="chạy thử, chỉ in kết quả, không ghi CSV/mặt nạ")
     args = parser.parse_args()
     setup_logging("run_sam_zeroshot", args)
 
