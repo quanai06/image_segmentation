@@ -6,6 +6,23 @@ splits_dir: data/splits
 
 mask_threshold: 127      # pixel > 127 là tổn thương
 
+# Tiền xử lý ảnh gốc trước khi resize (src/medseg/data/preprocess.py, report mục 7.7).
+# none = giữ nguyên ảnh như FCBFormer. Preset khác ghi ra data/processed/<ds>/<size>_<preset>/.
+preprocess: none
+preprocess_presets:
+  clean: [mask_outside, inpaint_highlights]
+  clean_color: [mask_outside, inpaint_highlights, normalize_color]
+preprocess_params:
+  dark_thr: 30             # nền tối: kênh lớn nhất <= 30 (khung CVC có giá trị 11-24)
+  overlay_dark: 8          # ô ScopeGuide của Kvasir đen tuyệt đối
+  overlay_min: 0.02        # overlay chiếm >= 2% ảnh trong FOV: có ô ScopeGuide
+  highlight_v: 220         # phản xạ sáng: V >= 220 và S <= 40 (HSV 0-255)
+  highlight_s: 40
+  highlight_dilate: 0.02   # nới mặt nạ qua quầng sáng mất màu (JPEG), tránh đốm xám sau inpaint
+  highlight_max_area: 0.005  # vùng sáng lớn hơn 0.5% ảnh được giữ (polyp màu nhạt)
+  # đích chuẩn hóa màu (LAB thang OpenCV 0-255): trung vị tập train Kvasir-SEG, in ra bởi analyze_artifacts.py
+  color_target: {L_mean: 124.0, L_std: 45.6, a_mean: 154.5, b_mean: 155.0}
+
 normalize: imagenet      # imagenet (encoder pretrained) | fcbformer (mean=std=0.5)
 
 augment: fcbformer       # fcbformer | none

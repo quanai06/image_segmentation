@@ -5,11 +5,13 @@ Tài liệu cho cả nhóm: dữ liệu đi từ file tải về đến batch te
 ## 1. Tổng quan
 
 ```
-download_data.py   tải + kiểm tra SHA-256 + giải nén      -> data/raw/
-prepare_data.py    đọc, nhị phân hóa mặt nạ, resize 256   -> data/processed/<ds>/256/
-make_splits.py     chia 80/10/10 theo FCBFormer           -> data/splits/<ds>/*.txt
-check_data.py      kiểm tra + thống kê + hình minh họa    -> report/tables, report/figures
-SegmentationDataset / build_dataloader                    -> batch cho mô hình
+download_data.py      tải + kiểm tra SHA-256 + giải nén      -> data/raw/
+prepare_data.py       đọc, (tiền xử lý), nhị phân hóa mặt nạ, resize 256
+                                                             -> data/processed/<ds>/256[_<preset>]/
+make_splits.py        chia 80/10/10 theo FCBFormer           -> data/splits/<ds>/*.txt
+check_data.py         kiểm tra + thống kê + hình minh họa    -> report/tables, report/figures
+analyze_artifacts.py  khung, ô ScopeGuide, phản xạ, màu      -> report/tables, report/figures
+SegmentationDataset / build_dataloader                       -> batch cho mô hình
 ```
 
 ## 2. Bộ dữ liệu
@@ -33,6 +35,33 @@ URL, SHA-256 và đường dẫn nằm trong `configs/datasets.yaml`. ISIC 2018 
 **Lưu ý TIFF của CVC-ClinicDB:** file khai báo `photometric = MINISBLACK` (ảnh xám) nhưng thực tế có 3 kênh màu. OpenCV chỉ đọc ra 1 kênh nên ảnh bị mất màu; vì vậy repo đọc TIFF bằng `tifffile` (FCBFormer cũng đọc qua `skimage`, vốn dùng `tifffile`). Test `test_cvc_tiff_read_as_color` chặn lỗi này.
 
 Ảnh bị resize thẳng về hình vuông (không giữ tỷ lệ), giống FCBFormer (họ dùng 352 x 352). Muốn kích thước khác: `python scripts/prepare_data.py --size 352`, dữ liệu sẽ nằm ở `data/processed/<ds>/352/`.
+
+### 3.1. Tiền xử lý tùy chọn (`src/medseg/data/preprocess.py`)
+
+Mặc định **tắt** (`preprocess: none` trong `configs/data.yaml`), tức là ảnh giữ nguyên như giao thức FCBFormer. Các preset áp lên ảnh gốc **trước** resize; mặt nạ không đổi.
+
+| Bước | Làm gì | Vì sao |
+|---|---|---|
+| `mask_outside` | Tìm vùng nhìn thấy của ống soi (FOV, bao lồi các mảng mô), tìm ô ScopeGuide ở góc dưới trái (vùng đen tuyệt đối hoặc xanh nối với góc), rồi tô đen mọi thứ ngoài FOV và trong ô | Khung CVC có giá trị 11–24, khung Kvasir bằng 0; 55% ảnh Kvasir có ô ScopeGuide (13 ảnh ô xanh). Đều là dấu hiệu nguồn ảnh, không phải tổn thương |
+| `inpaint_highlights` | Pixel V ≥ 220, S ≤ 40 thuộc vùng nhỏ (≤ 0.5% ảnh), nới 2%, inpaint TELEA | Phản xạ sáng và chữ trắng in đè lên mô. Vùng sáng lớn (polyp nhạt màu) được giữ |
+| `normalize_color` | Trong FOV: đưa L về trung bình/độ lệch chuẩn đích, co giãn a, b quanh 128 về trung bình đích | Kvasir sáng hơn CVC rõ (L trung vị 125 so với 107). Co giãn thay vì dịch để vùng trắng không bị nhuộm màu |
+
+| Preset | Các bước | Thư mục |
+|---|---|---|
+| `none` | không | `data/processed/<ds>/256/` |
+| `clean` | `mask_outside`, `inpaint_highlights` | `data/processed/<ds>/256_clean/` |
+| `clean_color` | `clean` + `normalize_color` | `data/processed/<ds>/256_clean_color/` |
+
+```bash
+python scripts/prepare_data.py --preprocess clean          # tạo thêm bản clean, không đè bản gốc
+python scripts/analyze_artifacts.py                        # số liệu + hình cho report mục 7.7
+```
+
+Dùng khi huấn luyện: đặt `"preprocess": "clean"` trong `configs/config.json` (mục `common`) hoặc `build_dataloader(..., preprocess="clean")`. Manifest của preset nằm trong thư mục preset (`manifest.csv`, thêm cột `valid_frac`, `overlay_frac`, `overlay_box`, `highlight_frac`); manifest chung trên Git không đổi.
+
+Tham số (ngưỡng, đích màu) nằm ở `preprocess_params` trong `configs/data.yaml`. Đích màu là trung vị tập train Kvasir-SEG, do `analyze_artifacts.py` in ra. Chỉ lấy từ tập train nên không rò rỉ thông tin của tập test hay của CVC.
+
+**Lưu ý:** chưa có kết quả huấn luyện chứng minh preset nào tốt hơn `none`. Đây là ứng viên cho giai đoạn 2, cần so sánh từng preset với baseline trên cùng cấu hình (report mục 7.7).
 
 ## 4. Chia tập (`make_splits.py`)
 

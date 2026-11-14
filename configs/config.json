@@ -12,6 +12,8 @@
     "ignore_index": 255,
     "normalize": "imagenet",
     "augment": "fcbformer",
+    "preprocess": "none",
+    "_preprocess": "none | clean | clean_color (configs/data.yaml). Preset khác none cần chạy prepare_data.py --preprocess <preset> trước.",
     "num_workers": 2,
 
     "datasets": ["kvasir_seg", "cvc_clinicdb"],

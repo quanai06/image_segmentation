@@ -1,0 +1,8 @@
+features,preset,balanced_acc_mean,balanced_acc_std
+global,none,0.9702,0.0079
+fov_color,none,0.9194,0.0057
+global,clean,0.964,0.0117
+fov_color,clean,0.9238,0.0046
+global,clean_color,0.9809,0.0028
+fov_color,clean_color,0.7846,0.0275
+geometry,any,0.996,0.0025

@@ -7,7 +7,8 @@ data/
 │   ├── kvasir_seg/Kvasir-SEG/{images,masks}/        # 1000 ảnh JPG
 │   └── cvc_clinicdb/CVC-ClinicDB/{Original,Ground Truth}/   # 612 ảnh TIFF
 ├── processed/              # dữ liệu đã chuẩn hóa, KHÔNG đẩy lên Git
-│   └── <dataset>/<size>/{images,masks}/<tên>.png
+│   ├── <dataset>/<size>/{images,masks}/<tên>.png           # không tiền xử lý (mặc định)
+│   └── <dataset>/<size>_<preset>/{images,masks}/, manifest.csv  # --preprocess clean | clean_color
 ├── splits/                 # file chia tập cố định, CÓ trong Git
 │   └── <dataset>/{train,val,test,all}.txt
 └── metadata/               # manifest nguồn gốc từng mẫu, CÓ trong Git

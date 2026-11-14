@@ -37,7 +37,15 @@ python scripts/download_data.py    # tải Kvasir-SEG, CVC-ClinicDB + kiểm tra
 python scripts/prepare_data.py     # chuẩn hóa -> data/processed/<dataset>/256/
 python scripts/make_splits.py      # chia 80/10/10 theo FCBFormer -> data/splits/
 python scripts/check_data.py       # kiểm tra + thống kê -> report/
-pytest -q                          # 19 test
+python scripts/analyze_artifacts.py   # khung, ô ScopeGuide, phản xạ, màu -> report/ (mục 7.7)
+pytest -q
+```
+
+Tiền xử lý ảnh (tùy chọn, mặc định tắt để giữ giao thức FCBFormer):
+
+```bash
+python scripts/prepare_data.py --preprocess clean         # bỏ khung/ô ScopeGuide, xóa phản xạ
+python scripts/prepare_data.py --preprocess clean_color   # thêm chuẩn hóa màu
 ```
 
 Giải nén `.rar` của CVC-ClinicDB cần `bsdtar` (có sẵn trên macOS) hoặc `unrar` (Colab: `apt install unrar`).

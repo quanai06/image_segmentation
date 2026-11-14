@@ -14,8 +14,10 @@ from medseg.data.transforms import build_transforms
 from medseg.paths import from_root
 
 
-def processed_root(dataset: str, image_size: int, processed_dir: str = "data/processed") -> Path:
-    return from_root(processed_dir) / dataset / str(image_size)
+def processed_root(dataset: str, image_size: int, processed_dir: str = "data/processed", preprocess: str = "none") -> Path:
+    """data/processed/<dataset>/<size>/ khi không tiền xử lý, <size>_<preset>/ khi có."""
+    sub = str(image_size) if preprocess == "none" else f"{image_size}_{preprocess}"
+    return from_root(processed_dir) / dataset / sub
 
 
 class SegmentationDataset(Dataset):
@@ -37,14 +39,17 @@ class SegmentationDataset(Dataset):
         normalize: str | None = None,
         names: list[str] | None = None,
         seed: int | None = None,
+        preprocess: str | None = None,
     ):
         cfg = load_data_config()
         self.dataset = dataset
         self.split = split
         self.image_size = image_size or cfg["image_size"]
-        self.root = processed_root(dataset, self.image_size, cfg["processed_dir"])
+        self.preprocess = preprocess or cfg.get("preprocess", "none")
+        self.root = processed_root(dataset, self.image_size, cfg["processed_dir"], self.preprocess)
         if not self.root.exists():
-            raise FileNotFoundError(f"Chưa có {self.root}. Chạy scripts/prepare_data.py trước.")
+            hint = "" if self.preprocess == "none" else f" --preprocess {self.preprocess}"
+            raise FileNotFoundError(f"Chưa có {self.root}. Chạy scripts/prepare_data.py{hint} trước.")
         self.names = names if names is not None else load_split(dataset, split)
         train = (split == "train") if train is None else train
         self.transform = build_transforms(

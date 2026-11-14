@@ -14,6 +14,7 @@ Phần việc: chuẩn bị dữ liệu dùng chung cho cả nhóm — tải, ch
 | 6 | Dataset/DataLoader + augmentation theo FCBFormer + chuẩn hóa ImageNet | Xong |
 | 7 | Kiểm tra dữ liệu, thống kê, hình minh họa; 19 test pytest | Xong, 19/19 đạt |
 | 8 | ISIC 2018 và PH2 | Hoãn theo quyết định của nhóm (xem mục 8) |
+| 9 | Phân tích artifact (khung, ô ScopeGuide, phản xạ, màu) + tiền xử lý tùy chọn `clean` / `clean_color`; 13 test | Xong; chưa kiểm chứng bằng huấn luyện (mục 7.7) |
 
 ## 2. Cấu trúc repo
 
@@ -173,12 +174,65 @@ Số liệu theo từng tập: `report/tables/modeling_stats.csv`, `report/table
 
 `pytest -q`: **19/19 đạt**, gồm: kích thước và tính tất định của cách chia tập, không chồng lấn giữa các tập, nhị phân hóa mặt nạ JPG có nhiễu, resize giữ mặt nạ nhị phân, đọc TIFF có màu, định dạng tensor đầu ra, biến đổi ở tập test là tất định, DataLoader tái lập được với nhiều worker, loader đánh giá không bỏ mẫu nào.
 
+`tests/test_preprocess.py` (13 test, mục 7.7): khung được tô về 0, phát hiện ô ScopeGuide đen và xanh, lòng ruột tối không bị nhận nhầm là ô, phản xạ nhỏ bị xóa còn vùng sáng lớn được giữ, chuẩn hóa màu đạt đích và giữ màu trắng trung tính, preset `none` không đổi ảnh, cấu hình preset hợp lệ; thêm 4 ca trên ảnh thật (tự bỏ qua nếu chưa tải dữ liệu). Toàn bộ `pytest -q`: 45 đạt, 1 bỏ qua.
+
+### 7.7. Artifact trong ảnh và tiền xử lý tùy chọn
+
+Đo trên ảnh gốc bằng `scripts/analyze_artifacts.py`, dùng đúng các bộ dò trong `src/medseg/data/preprocess.py`. Các bộ dò đã được kiểm tra bằng mắt trên các ca khó: ô đen hình bậc thang, ô xanh có chữ bên trong, ảnh không có khung, lòng ruột tối sát góc ở CVC.
+
+| | Kvasir-SEG | CVC-ClinicDB |
+|---|---|---|
+| Mức xám của khung (trung vị kênh lớn nhất) | 0 | 11 |
+| Vùng nhìn thấy (FOV) / diện tích ảnh, trung vị | 83% | 72% |
+| Ảnh có ô ScopeGuide ở góc dưới trái | **55.4%** (13 ảnh ô xanh, còn lại ô đen) | 0% |
+| Chữ in đè lên mô (ngày giờ, CVP, ID) | phần lớn ảnh, dải bên trái | không có |
+| Phản xạ sáng được xử lý (sau khi nới mặt nạ), trung vị / phân vị 95% | 3.1% / 6.4% ảnh | 0.6% / 1.9% ảnh |
+| Mật độ phản xạ trong tổn thương so với nền | 1.2 lần | 2.3 lần |
+| Độ sáng L trong FOV, trung vị (0–255) | 125 | 107 |
+| Sắc đỏ a trong FOV, trung vị | 154 | 144 |
+
+Tổn thương gần như không nằm ngoài vùng hợp lệ: trung bình 0.01% (Kvasir) và 0.11% (CVC) số pixel tổn thương. 24 ảnh CVC có hơn 1% (tối đa 7.3%) pixel tổn thương ngoài FOV. Các pixel đó có giá trị 11–20, đúng bằng mức xám của khung, tức là mặt nạ gán nhãn tràn ra khung đen chứ không phải bộ dò cắt mất tổn thương.
+
+**Khoảng cách miền.** Để đo xem tiền xử lý xóa được bao nhiêu dấu hiệu nguồn ảnh, cho một hồi quy logistic đoán ảnh thuộc Kvasir hay CVC (độ chính xác cân bằng, 5-fold; 0.5 là không phân biệt được):
+
+| Đặc trưng | `none` | `clean` | `clean_color` |
+|---|---|---|---|
+| Màu toàn ảnh 256 x 256 (trung bình, độ lệch chuẩn RGB + LAB) | 0.970 | 0.964 | 0.981 |
+| Màu trong FOV (phân vị 5–95 của L, a, b) | 0.919 | 0.924 | **0.785** |
+| Hình học: diện tích FOV + diện tích ô ScopeGuide | 0.996 | 0.996 | 0.996 |
+
+Nhận xét:
+- **Hình dạng khung là dấu hiệu nguồn ảnh mạnh nhất** (99.6%), và không preset nào xóa được: FOV của CVC chiếm 72% ảnh, của Kvasir 83%. Màu toàn ảnh bị chi phối bởi phần khung đen này, nên chuẩn hóa màu không làm giảm độ chính xác ở dòng đầu. Khi đọc kết quả chuyển miền (E2), cần nhớ mô hình có thể nhận ra ngay ảnh đến từ bộ khác.
+- **Chuẩn hóa màu thu hẹp được chênh lệch màu** trong FOV (0.92 xuống 0.79), nhưng không xóa hết: hình dạng phân bố màu vẫn khác nhau.
+- **`clean` đưa khung và ô ScopeGuide về cùng giá trị 0**, nhưng gần như không đổi độ chính xác, vì hình học vẫn còn.
+- Phản xạ sáng dày hơn trong tổn thương (gấp 1.2–2.3 lần nền), nên đây có thể là một dấu hiệu có ích cho mô hình. Xóa phản xạ chưa chắc đã có lợi.
+
+**Tiền xử lý đã thêm** (`src/medseg/data/preprocess.py`, mặc định tắt):
+
+| Preset | Bước |
+|---|---|
+| `none` (mặc định) | giữ nguyên ảnh, đúng giao thức FCBFormer |
+| `clean` | tô đen ngoài FOV và ô ScopeGuide; inpaint phản xạ sáng và chữ trắng (vùng sáng lớn như polyp nhạt màu được giữ) |
+| `clean_color` | `clean` + chuẩn hóa màu LAB trong FOV về trung vị tập train Kvasir-SEG |
+
+Chi tiết cách dùng: `docs/data_pipeline.md` mục 3.1.
+
+![Tiền xử lý](figures/preprocess_examples.png)
+
+![Màu theo bộ dữ liệu](figures/color_shift.png)
+
+Hạn chế:
+- Chữ in đè chỉ bị xóa một phần: viền ký tự bị khử răng cưa trộn với màu mô nên không đạt ngưỡng sáng. Muốn xóa hết cần bộ dò chữ riêng, nhưng nới ngưỡng sẽ xóa nhầm mô sáng.
+- Chưa có kết quả huấn luyện cho thấy preset nào tốt hơn `none`. Đề xuất cho giai đoạn 2: so `none`, `clean`, `clean_color` trên E1 và E2, giữ nguyên mọi cấu hình khác. Nếu muốn xóa dấu hiệu hình học của khung, có thể thêm bước áp một mặt nạ FOV chung cho mọi ảnh, nhưng cách đó làm mất phần viền ảnh Kvasir.
+
+Số liệu: `report/tables/artifact_stats.csv`, `report/tables/domain_gap.csv`, từng ảnh: `report/tables/artifacts_per_image.csv`.
+
 ## 8. Hạn chế và việc tiếp theo
 
 1. **ISIC 2018 và PH2 chưa tải.** Máy chủ ISIC chỉ đạt khoảng 0.1–0.2 MB/s, mà ảnh train và test nặng khoảng 13.5 GB (ước tính hơn 15 giờ). Phương án đã khảo sát: bản sao trên Hugging Face (`surajbijjahalli/ISIC2018`, đủ 2594/100/1000 ảnh kèm mặt nạ) tải nhanh hơn nhiều, nhưng không có mã ảnh gốc. Có thể tải các file mặt nạ chính thức (khoảng 37 MB) từ ISIC để so khớp từng mặt nạ, vừa khôi phục tên file vừa xác minh bản sao. Link Dropbox chính thức của PH2 hiện không trả về file. Khi thêm, chỉ cần bổ sung một mục trong `configs/datasets.yaml` và một nhánh giao thức chia tập.
 2. **Chưa đối chiếu trực tiếp với code FCBFormer.** Hàm chia tập được viết lại theo đúng từng bước của `split_ids()` (cùng tham số và thứ tự gọi), và số lượng 800/100/100, 490/61/61 khớp với paper. Nhưng chưa chạy chính code của họ để so từng tên file.
 3. **Chia tập theo video cho CVC-ClinicDB.** Để có tập test CVC không rò rỉ, cần bảng ánh xạ khung hình sang 31 video gốc rồi chia theo video. Đề xuất làm sau nếu nhóm cần kết quả train/test trong CVC đáng tin.
-4. **Một số ảnh Kvasir-SEG có ô hiển thị của máy nội soi** (ô đen hoặc xanh ở góc dưới bên trái, chữ chú thích). Hiện giữ nguyên như paper nền; khi phân tích lỗi nên để ý mô hình có bị ô này đánh lừa không.
+4. **Ảnh Kvasir-SEG có ô hiển thị của máy nội soi** (55.4% ảnh có ô ScopeGuide đen hoặc xanh ở góc dưới bên trái; chữ chú thích đè lên mô). Đã đo và thêm preset tiền xử lý `clean` / `clean_color` (mục 7.7), mặc định vẫn giữ nguyên như paper nền. Cần thí nghiệm ở giai đoạn 2 để biết có nên bật hay không; khi phân tích lỗi nên để ý mô hình có bị ô này đánh lừa không.
 
 ## 9. Tái lập
 
@@ -189,5 +243,7 @@ python scripts/download_data.py
 python scripts/prepare_data.py
 python scripts/make_splits.py
 python scripts/check_data.py      # chưa có ảnh: thêm --manifest-only để chỉ tính bảng từ manifest
+python scripts/analyze_artifacts.py                 # mục 7.7
+python scripts/prepare_data.py --preprocess clean   # tùy chọn: dữ liệu đã tiền xử lý
 pytest -q
 ```

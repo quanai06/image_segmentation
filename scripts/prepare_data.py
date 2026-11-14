@@ -3,10 +3,14 @@
 - Ảnh: RGB, resize INTER_AREA, lưu PNG.
 - Mặt nạ: nhị phân hóa (> ngưỡng), resize INTER_AREA rồi ngưỡng 0.5, lưu PNG {0, 255}.
 - Ghi manifest kiểm tra nguồn gốc vào data/metadata/<dataset>_manifest.csv.
+- Tùy chọn --preprocess <preset> (configs/data.yaml): tiền xử lý ảnh gốc trước resize
+  (src/medseg/data/preprocess.py), ghi ra data/processed/<dataset>/<size>_<preset>/ kèm
+  manifest.csv riêng trong thư mục đó; không đụng tới bản không tiền xử lý và manifest chung.
 
 Chạy từ gốc repo:
     python scripts/prepare_data.py
     python scripts/prepare_data.py --datasets kvasir_seg --size 352
+    python scripts/prepare_data.py --preprocess clean
 """
 
 import argparse
@@ -24,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from medseg.config import load_data_config, load_dataset_specs  # noqa: E402
 from medseg.data.dataset import processed_root  # noqa: E402
 from medseg.data.io import list_images, read_image, read_mask, resize_pair  # noqa: E402
+from medseg.data.preprocess import PreprocessParams, preprocess, resolve_preset  # noqa: E402
 from medseg.paths import DATA, from_root, to_root  # noqa: E402
 
 
@@ -31,14 +36,15 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
+def prepare(name: str, spec: dict, size: int, threshold: int, preset: str = "none",
+            steps: list[str] | None = None, params: PreprocessParams | None = None) -> None:
     images = list_images(from_root(spec["raw_images"]))
     masks = {p.stem: p for p in list_images(from_root(spec["raw_masks"]))}
     missing = [p.stem for p in images if p.stem not in masks]
     if missing:
         raise ValueError(f"{name}: {len(missing)} ảnh không có mặt nạ, vd {missing[:3]}")
 
-    out = processed_root(name, size)
+    out = processed_root(name, size, preprocess=preset)
     (out / "images").mkdir(parents=True, exist_ok=True)
     (out / "masks").mkdir(parents=True, exist_ok=True)
 
@@ -48,6 +54,9 @@ def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
         img, msk = read_image(img_path), read_mask(msk_path, threshold)
         if img.shape[:2] != msk.shape:
             raise ValueError(f"{name}/{img_path.name}: kích thước ảnh {img.shape[:2]} khác mặt nạ {msk.shape}")
+        info = {}
+        if steps:
+            img, info = preprocess(img, steps, params or PreprocessParams())
         img_r, msk_r = resize_pair(img, msk, size)
         cv2.imwrite(str(out / "images" / f"{img_path.stem}.png"), cv2.cvtColor(img_r, cv2.COLOR_RGB2BGR))
         cv2.imwrite(str(out / "masks" / f"{img_path.stem}.png"), msk_r * 255)
@@ -62,9 +71,11 @@ def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
             "n_components": cv2.connectedComponents(msk)[0] - 1,
             "sha256_image": file_sha256(img_path),
             "sha256_mask": file_sha256(msk_path),
+            **info,
         })
 
-    meta = DATA / "metadata" / f"{name}_manifest.csv"
+    # manifest chung (có trên Git) chỉ ghi cho bản không tiền xử lý
+    meta = DATA / "metadata" / f"{name}_manifest.csv" if preset == "none" else out / "manifest.csv"
     meta.parent.mkdir(parents=True, exist_ok=True)
     with open(meta, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -74,6 +85,10 @@ def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
     fg = np.array([r["fg_ratio_orig"] for r in rows])
     print(f"  {len(rows)} mẫu -> {to_root(out)}")
     print(f"  tỷ lệ tổn thương: min {fg.min():.4f}, trung vị {np.median(fg):.4f}, max {fg.max():.4f}")
+    if steps:
+        box = np.mean([r["overlay_box"] for r in rows])
+        hl = np.median([r["highlight_frac"] for r in rows])
+        print(f"  có ô ScopeGuide: {100 * box:.1f}%, phản xạ được inpaint (trung vị): {100 * hl:.2f}% ảnh")
     print(f"  manifest: {to_root(meta)}")
 
 
@@ -83,10 +98,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--datasets", nargs="+", default=list(specs), choices=list(specs))
     parser.add_argument("--size", type=int, default=cfg["image_size"])
+    presets = cfg.get("preprocess_presets", {})
+    parser.add_argument("--preprocess", default=cfg.get("preprocess", "none"), choices=["none", *presets])
     args = parser.parse_args()
+    steps = resolve_preset(args.preprocess, presets)
+    params = PreprocessParams.from_config(cfg.get("preprocess_params"))
+    if steps:
+        print(f"tiền xử lý '{args.preprocess}': {' -> '.join(steps)}")
     for name in args.datasets:
         print(f"[{name}]")
-        prepare(name, specs[name], args.size, cfg["mask_threshold"])
+        prepare(name, specs[name], args.size, cfg["mask_threshold"], args.preprocess, steps, params)
 
 
 if __name__ == "__main__":

@@ -18,4 +18,13 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
-base/
+
+
+# Kaggle: gói build ra (tạo lại bằng scripts/build_kaggle.py) và trọng số pretrained
+Kaggle/medseg-code/
+Kaggle/*.zip
+pretrained/
+
+
+base/*
+Kaggle/*

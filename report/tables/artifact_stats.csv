@@ -1,0 +1,3 @@
+dataset,n,frame_level_median,valid_frac_median,overlay_box_pct,overlay_green_n,highlight_frac_median,highlight_frac_p95,highlight_lesion_vs_bg,lesion_outside_valid_mean,lesion_outside_valid_max,n_lesion_outside_gt_1pct,L_mean_median,L_std_median,a_mean_median,b_mean_median
+cvc_clinicdb,612,11.0,0.7219,0.0,0,0.0058,0.0189,2.2966,0.0011,0.0733,24,106.8931,43.5652,144.176,151.5901
+kvasir_seg,1000,0.0,0.8321,55.4,13,0.0312,0.0641,1.2443,0.0001,0.0065,0,124.5326,46.8342,154.352,154.8698

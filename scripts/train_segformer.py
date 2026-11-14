@@ -65,6 +65,7 @@ def make_loader(common: dict, dataset: str, split: str, batch_size: int):
         image_size=common["image_size"],
         augment=common["augment"],
         normalize=common["normalize"],
+        preprocess=common.get("preprocess", "none"),
     )
 
 
