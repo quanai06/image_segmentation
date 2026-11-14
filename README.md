@@ -55,3 +55,13 @@ cross_loader = build_dataloader("cvc_clinicdb", "all")       # test chuyển mi�
 Mỗi batch: `image` (B, 3, 256, 256) đã chuẩn hóa ImageNet, `mask` (B, 1, 256, 256) giá trị {0, 1}, `name`.
 
 Chi tiết: [docs/data_pipeline.md](docs/data_pipeline.md) · Báo cáo phần dữ liệu: [report/report.md](report/report.md)
+
+## Huấn luyện
+
+Biến dùng chung và siêu tham số từng mô hình nằm trong `configs/config.json`.
+
+```bash
+python scripts/train_segformer.py   # SegFormer-B2, cần pretrained/mit_b2.pth
+```
+
+Kế hoạch và đối chiếu với code gốc: [docs/segformer_plan.md](docs/segformer_plan.md)
