@@ -5,11 +5,15 @@ Kiểm tra:
 - ảnh/mặt nạ đã xử lý: đủ file, đúng kích thước, mặt nạ nhị phân
 - thống kê kích thước tổn thương theo từng tập
 - ảnh gần trùng giữa test và train (rò rỉ do khung hình video liên tiếp)
+- thống kê phục vụ huấn luyện: lệch lớp, tổn thương nhỏ ở độ phân giải đầu ra 1/4
+  (SegFormer), méo tỷ lệ khi resize vuông, trùng lặp chính xác theo SHA-256
+- khung hình kề nhau (số thứ tự ±1) giữa test và train với bộ đánh số theo video
 
 Kết quả: report/tables/*.csv và report/figures/*.png
 
 Chạy từ gốc repo:
     python scripts/check_data.py
+    python scripts/check_data.py --manifest-only   # chỉ dùng manifest + splits, không cần ảnh
 """
 
 import argparse
@@ -35,6 +39,9 @@ FIG = REPORT / "figures"
 TAB = REPORT / "tables"
 SPLITS = ("train", "val", "test")
 SMALL = 0.05  # tổn thương nhỏ: < 5% diện tích ảnh
+TINY = 0.02  # tổn thương rất nhỏ: < 2% diện tích ảnh
+OUT_STRIDE = 4  # SegFormer xuất logit ở 1/4 độ phân giải đầu vào
+MIN_CELLS = 50  # ngưỡng "quá ít ô logit" để mô tả biên tổn thương
 
 
 def check_splits(name: str) -> dict[str, list[str]]:
@@ -71,6 +78,51 @@ def split_stats(name: str, parts: dict, manifest: pd.DataFrame) -> pd.DataFrame:
             "multi_lesion_pct": 100 * (m["n_components"] > 1).mean(),
         })
     return pd.DataFrame(rows)
+
+
+def modeling_stats(name: str, parts: dict, manifest: pd.DataFrame, size: int) -> pd.DataFrame:
+    """Thống kê ảnh hưởng trực tiếp tới huấn luyện, tính trên mặt nạ đã resize về `size`."""
+    rows = []
+    cells = (size // OUT_STRIDE) ** 2
+    col = f"fg_ratio_{size}" if f"fg_ratio_{size}" in manifest else "fg_ratio_orig"
+    for s in (*SPLITS, "all"):
+        m = manifest.set_index("name").loc[parts[s]]
+        fg = m[col]
+        px = fg * size * size
+        aspect = m["orig_width"] / m["orig_height"]
+        rows.append({
+            "dataset": name, "split": s, "n": len(m),
+            "fg_pixel_share": fg.mean(),
+            "bg_to_fg": (1 - fg.mean()) / fg.mean(),
+            "lesion_px_min": px.min(), "lesion_px_p5": px.quantile(0.05), "lesion_px_median": px.median(),
+            f"n_lt_{MIN_CELLS}_cells_at_1_{OUT_STRIDE}": int((fg * cells < MIN_CELLS).sum()),
+            "tiny_lesion_pct": 100 * (fg < TINY).mean(),
+            "max_components": int(m["n_components"].max()),
+            "aspect_wh_median": aspect.median(),
+            "downscale_long_side_min": (size / m[["orig_width", "orig_height"]].max(axis=1)).min(),
+            "resize_fg_abs_err_max": (fg - m["fg_ratio_orig"]).abs().max(),
+            "dup_image_sha": int(m["sha256_image"].duplicated().sum()),
+            "dup_mask_sha": int(m["sha256_mask"].duplicated().sum()),
+        })
+    return pd.DataFrame(rows)
+
+
+def frame_adjacency(name: str, parts: dict) -> dict | None:
+    """Tỷ lệ ảnh test/val có khung hình kề (số thứ tự ±1) nằm trong train.
+
+    Chỉ có nghĩa với bộ đánh số theo thứ tự khung hình video (CVC-ClinicDB); bỏ qua nếu tên
+    mẫu không phải số nguyên.
+    """
+    if not all(n.isdigit() for n in parts["all"]):
+        return None
+    train = {int(n) for n in parts["train"]}
+    row = {"dataset": name}
+    for s in ("val", "test"):
+        ids = [int(n) for n in parts[s]]
+        adj = sum((i - 1 in train) or (i + 1 in train) for i in ids)
+        row[f"{s}_n"] = len(ids)
+        row[f"pct_{s}_adjacent_train"] = 100 * adj / len(ids)
+    return row
 
 
 def thumbnails(name: str, size: int, names: list[str]) -> np.ndarray:
@@ -154,21 +206,30 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--datasets", nargs="+", default=list(specs), choices=list(specs))
     parser.add_argument("--size", type=int, default=cfg["image_size"])
+    parser.add_argument("--manifest-only", action="store_true",
+                        help="chỉ dùng manifest và file chia tập; bỏ qua kiểm tra ảnh, ảnh gần trùng và hình")
     args = parser.parse_args()
     FIG.mkdir(parents=True, exist_ok=True)
     TAB.mkdir(parents=True, exist_ok=True)
 
-    all_stats, dup_rows, manifests = [], [], {}
+    all_stats, model_stats, adj_rows, dup_rows, manifests = [], [], [], [], {}
     fig, ax = plt.subplots(1, 2, figsize=(10, 3.4))
     for name in args.datasets:
         print(f"[{name}]")
         parts = check_splits(name)
         print(f"  chia tập hợp lệ: " + ", ".join(f"{s}={len(parts[s])}" for s in SPLITS))
-        check_files(name, args.size, parts["all"])
-        print(f"  {len(parts['all'])} cặp ảnh/mặt nạ {args.size}x{args.size}, mặt nạ nhị phân")
         manifest = pd.read_csv(DATA / "metadata" / f"{name}_manifest.csv", dtype={"name": str})
         manifests[name] = manifest
         all_stats.append(split_stats(name, parts, manifest))
+        model_stats.append(modeling_stats(name, parts, manifest, args.size))
+        adj = frame_adjacency(name, parts)
+        if adj is not None:
+            adj_rows.append(adj)
+            print(f"  ảnh test có khung hình kề (±1) trong train: {adj['pct_test_adjacent_train']:.1f}%")
+        if args.manifest_only:
+            continue
+        check_files(name, args.size, parts["all"])
+        print(f"  {len(parts['all'])} cặp ảnh/mặt nạ {args.size}x{args.size}, mặt nạ nhị phân")
         dup = near_duplicates(name, args.size, parts)
         best = dup.pop("_best")
         dup_rows.append(dup)
@@ -177,28 +238,38 @@ def main() -> None:
         ax[0].hist(manifest["fg_ratio_orig"], bins=40, alpha=0.6, label=name)
         print("  hình:", to_root(plot_samples(name, args.size, parts)), to_root(plot_augment(name, args.size)))
 
-    ax[0].set_xlabel("tỷ lệ diện tích tổn thương")
-    ax[0].set_ylabel("số ảnh")
-    ax[0].set_title("Kích thước tổn thương")
-    ax[1].set_xlabel("tương quan lớn nhất với một ảnh train")
-    ax[1].set_title("Ảnh test gần trùng ảnh train")
-    for a in ax:
-        a.legend()
-    fig.tight_layout()
-    fig.savefig(FIG / "data_overview.png", dpi=120)
+    if not args.manifest_only:
+        ax[0].set_xlabel("tỷ lệ diện tích tổn thương")
+        ax[0].set_ylabel("số ảnh")
+        ax[0].set_title("Kích thước tổn thương")
+        ax[1].set_xlabel("tương quan lớn nhất với một ảnh train")
+        ax[1].set_title("Ảnh test gần trùng ảnh train")
+        for a in ax:
+            a.legend()
+        fig.tight_layout()
+        fig.savefig(FIG / "data_overview.png", dpi=120)
     plt.close(fig)
 
     stats = pd.concat(all_stats).round(4)
     stats.to_csv(TAB / "split_stats.csv", index=False)
-    dups = pd.DataFrame(dup_rows).round(4)
-    dups.to_csv(TAB / "near_duplicates.csv", index=False)
+    mstats = pd.concat(model_stats).round(4)
+    mstats.to_csv(TAB / "modeling_stats.csv", index=False)
+    if adj_rows:
+        adjs = pd.DataFrame(adj_rows).round(2)
+        adjs.to_csv(TAB / "frame_adjacency.csv", index=False)
     sizes = pd.concat([
         m.assign(dataset=n)[["dataset", "orig_width", "orig_height"]] for n, m in manifests.items()
     ]).groupby("dataset").agg(["min", "median", "max"])
     sizes.to_csv(TAB / "image_sizes.csv")
     print("\n" + stats.to_string(index=False))
-    print("\n" + dups.to_string(index=False))
-    print("\nĐã ghi report/tables/ và report/figures/")
+    print("\n" + mstats.to_string(index=False))
+    if adj_rows:
+        print("\n" + adjs.to_string(index=False))
+    if not args.manifest_only:
+        dups = pd.DataFrame(dup_rows).round(4)
+        dups.to_csv(TAB / "near_duplicates.csv", index=False)
+        print("\n" + dups.to_string(index=False))
+    print("\nĐã ghi report/tables/" + ("" if args.manifest_only else " và report/figures/"))
 
 
 if __name__ == "__main__":

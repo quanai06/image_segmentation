@@ -124,21 +124,52 @@ CVC-ClinicDB gồm các khung hình trích từ video nội soi, nên các khung
 | Kvasir-SEG | 100 | 0.846 | 2.0% | 14.0% |
 | CVC-ClinicDB | 61 | 0.954 | **54.1%** | **86.9%** |
 
-Hơn một nửa ảnh test của CVC-ClinicDB có một "bản gần như sao chép" trong tập train. Vì vậy, điểm số trên tập test CVC theo giao thức FCBFormer có thể **cao hơn thực tế**, vì mô hình gần như đã thấy ảnh đó. Kvasir-SEG không có vấn đề này ở mức đáng kể.
+Kiểm tra thứ hai không cần ảnh: tên mẫu CVC là số thứ tự khung hình, các khung trong cùng video được đánh số liên tiếp. Đếm số ảnh có khung hình kề (số thứ tự ±1) nằm trong train:
+
+| Bộ | Tập | n | % có khung kề trong train |
+|---|---|---|---|
+| CVC-ClinicDB | val | 61 | **96.7%** (59/61) |
+| CVC-ClinicDB | test | 61 | **91.8%** (56/61) |
+
+Hai cách đo cho cùng một kết luận: hơn một nửa ảnh test của CVC-ClinicDB có một "bản gần như sao chép" trong tập train. Vì vậy, điểm số trên tập test CVC theo giao thức FCBFormer có thể **cao hơn thực tế**, vì mô hình gần như đã thấy ảnh đó. Kvasir-SEG không có vấn đề này ở mức đáng kể.
 
 Hệ quả cho nhóm:
 - Vẫn dùng giao thức FCBFormer khi cần so sánh với paper nền.
-- Kết quả train và test trên CVC cần kèm cảnh báo này trong báo cáo cuối.
+- Kết quả train và test trên CVC cần kèm cảnh báo này trong báo cáo cuối. Tập val của CVC cũng rò rỉ, nên chọn checkpoint hay dừng sớm theo val CVC sẽ thiên về ghi nhớ.
 - Thí nghiệm chuyển miền (train Kvasir, test toàn bộ CVC qua `all.txt`) **không** bị ảnh hưởng, vì hai bộ đến từ hai nguồn khác nhau. Đây thêm một lý do để coi chuyển miền là thước đo đáng tin hơn.
 
 ![Mẫu CVC-ClinicDB](figures/cvc_clinicdb_samples.png)
 
-### 7.4. Tái lập và hiệu năng của DataLoader
+### 7.4. Thống kê ảnh hưởng tới huấn luyện
+
+Tính trên mặt nạ đã resize 256 x 256, toàn bộ mỗi bộ dữ liệu. "Ô 1/4" là ô trên lưới logit 64 x 64, độ phân giải đầu ra của SegFormer.
+
+| | Kvasir-SEG | CVC-ClinicDB |
+|---|---|---|
+| Tỷ lệ pixel tổn thương | 15.4% | 9.2% |
+| Tỷ lệ nền : tổn thương | 5.5 : 1 | 9.9 : 1 |
+| Tổn thương nhỏ nhất / phân vị 5% / trung vị (pixel) | 314 / 1667 / 7470 | 226 / 886 / 4475 |
+| Số ảnh có tổn thương dưới 50 ô 1/4 | 10 | 22 |
+| % ảnh có tổn thương dưới 2% diện tích | 3.1% | 10.0% |
+| Số vùng tổn thương nhiều nhất trong một ảnh | 10 | 3 |
+| Tỷ lệ rộng/cao gốc (trung vị) | 1.16 | 1.33 (mọi ảnh) |
+| Hệ số thu nhỏ cạnh dài nhỏ nhất | 0.13 (thu nhỏ khoảng 7.5 lần) | 0.67 |
+| Sai lệch tỷ lệ tổn thương do resize, lớn nhất | 0.0019 | 0.0009 |
+| Ảnh / mặt nạ trùng hoàn toàn (SHA-256) | 0 / 0 | 0 / 0 |
+
+Hệ quả cho nhóm:
+- **Lệch lớp:** nên dùng loss kết hợp BCE + Dice, và dùng cùng một loss cho mọi mô hình để so sánh công bằng.
+- **Tổn thương nhỏ:** với các ca dưới 50 ô 1/4, biên tổn thương chỉ còn vài ô logit của SegFormer. Logit phải được upsample về 256 trước khi tính loss và metric. Nên báo cáo thêm Dice theo nhóm kích thước, vì HD95 và recall của nhóm nhỏ là nơi CNN và Transformer dễ khác nhau nhất.
+- **Méo tỷ lệ:** resize thẳng về hình vuông nén ngang toàn bộ ảnh CVC (tỷ lệ 4:3 thành 1:1). Diện tích tổn thương gần như không đổi, nhưng hình học thì có. Vì vậy HD95 tính trên ảnh 256 không so trực tiếp được với số liệu đo ở độ phân giải gốc.
+
+Số liệu theo từng tập: `report/tables/modeling_stats.csv`, `report/tables/frame_adjacency.csv`.
+
+### 7.5. Tái lập và hiệu năng của DataLoader
 
 - albumentations 2.x không dùng seed toàn cục. Repo tự seed bộ biến đổi của từng worker từ seed của DataLoader: cùng seed thì ra cùng batch, các worker khác nhau không bị trùng augmentation (đã kiểm tra bằng test).
 - Bật `persistent_workers` để worker không khởi động lại mỗi epoch. Đo trên MacBook (CPU), một epoch train Kvasir-SEG (800 ảnh): 2.4s với 0 worker, 1.3s với 2 worker, 0.7s với 4 worker (không tính epoch đầu). Trước khi bật, 4 worker mất 24s mỗi epoch trên macOS do phải khởi động lại.
 
-### 7.5. Kết quả kiểm thử
+### 7.6. Kết quả kiểm thử
 
 `pytest -q`: **19/19 đạt**, gồm: kích thước và tính tất định của cách chia tập, không chồng lấn giữa các tập, nhị phân hóa mặt nạ JPG có nhiễu, resize giữ mặt nạ nhị phân, đọc TIFF có màu, định dạng tensor đầu ra, biến đổi ở tập test là tất định, DataLoader tái lập được với nhiều worker, loader đánh giá không bỏ mẫu nào.
 
@@ -157,6 +188,6 @@ pip install -r requirements.txt && pip install -e .
 python scripts/download_data.py
 python scripts/prepare_data.py
 python scripts/make_splits.py
-python scripts/check_data.py
+python scripts/check_data.py      # chưa có ảnh: thêm --manifest-only để chỉ tính bảng từ manifest
 pytest -q
 ```

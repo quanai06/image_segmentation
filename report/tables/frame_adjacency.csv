@@ -1,0 +1,2 @@
+dataset,val_n,pct_val_adjacent_train,test_n,pct_test_adjacent_train
+cvc_clinicdb,61,96.72,61,91.8

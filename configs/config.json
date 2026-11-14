@@ -1,0 +1,99 @@
+{
+  "_note": "Biến dùng chung cho huấn luyện/đánh giá. Khóa bắt đầu bằng '_' là chú thích, bị bỏ qua khi đọc. Đường dẫn tính từ gốc repo.",
+
+  "common": {
+    "seed": 42,
+    "device": "auto",
+    "deterministic": false,
+
+    "image_size": 256,
+    "in_channels": 3,
+    "num_classes": 2,
+    "ignore_index": 255,
+    "normalize": "imagenet",
+    "augment": "fcbformer",
+    "num_workers": 2,
+
+    "datasets": ["kvasir_seg", "cvc_clinicdb"],
+    "train_dataset": "kvasir_seg",
+    "val_split": "val",
+    "test_split": "test",
+    "cross_domain": {"dataset": "cvc_clinicdb", "split": "all"},
+
+    "output_dir": "outputs",
+    "pretrained_dir": "pretrained"
+  },
+
+  "segformer_b2": {
+    "_source": "base/SegFormer-master/local_configs/segformer/B2/segformer.b2.512x512.ade.160k.py + _base_/schedules/schedule_160k_adamw.py + mmseg/models/backbones/mix_transformer.py (mit_b2)",
+    "_stage": "Giai đoạn 1: giữ nguyên siêu tham số gốc của SegFormer-B2. Chỉ dữ liệu (256 x 256, augmentation, chia tập) theo pipeline chung của nhóm.",
+
+    "backbone": {
+      "name": "mit_b2",
+      "embed_dims": [64, 128, 320, 512],
+      "num_heads": [1, 2, 5, 8],
+      "mlp_ratios": [4, 4, 4, 4],
+      "depths": [3, 4, 6, 3],
+      "sr_ratios": [8, 4, 2, 1],
+      "qkv_bias": true,
+      "qk_scale": null,
+      "drop_rate": 0.0,
+      "attn_drop_rate": 0.0,
+      "drop_path_rate": 0.1,
+      "norm_eps": 1e-6,
+      "pretrained": "pretrained/mit_b2.pth"
+    },
+
+    "decode_head": {
+      "in_channels": [64, 128, 320, 512],
+      "in_index": [0, 1, 2, 3],
+      "feature_strides": [4, 8, 16, 32],
+      "embed_dim": 768,
+      "dropout_ratio": 0.1,
+      "align_corners": false,
+      "_norm": "SyncBN gốc; chạy 1 GPU nên dùng BatchNorm2d (tương đương)"
+    },
+
+    "loss": {
+      "type": "CrossEntropyLoss",
+      "use_sigmoid": false,
+      "loss_weight": 1.0
+    },
+
+    "optimizer": {
+      "type": "AdamW",
+      "lr": 6e-05,
+      "betas": [0.9, 0.999],
+      "weight_decay": 0.01,
+      "custom_keys": {
+        "pos_block": {"decay_mult": 0.0},
+        "norm": {"decay_mult": 0.0},
+        "head": {"lr_mult": 10.0}
+      }
+    },
+
+    "lr_schedule": {
+      "policy": "poly",
+      "power": 1.0,
+      "min_lr": 0.0,
+      "by_epoch": false,
+      "warmup": "linear",
+      "warmup_iters": 1500,
+      "warmup_ratio": 1e-06
+    },
+
+    "runner": {
+      "max_iters": 160000,
+      "batch_size": 16,
+      "_batch_size": "gốc: samples_per_gpu=2 x 8 GPU = 16",
+      "log_interval": 50,
+      "checkpoint_interval": 4000,
+      "eval_interval": 16000,
+      "eval_metric": "mIoU",
+      "test_mode": "whole",
+      "cudnn_benchmark": true
+    },
+
+    "_original_data": "Tham khảo, KHÔNG dùng ở giai đoạn 1: crop 512x512, resize ratio 0.5-2.0, RandomFlip 0.5, PhotoMetricDistortion; mean/std ImageNet (trùng normalize='imagenet')."
+  }
+}

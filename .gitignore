@@ -18,3 +18,4 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+base/
