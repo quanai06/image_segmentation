@@ -12,7 +12,6 @@ image_segmentation/
 ├── data/             # raw/, processed/ (không lên Git), splits/, metadata/ (có trên Git)
 ├── src/medseg/       # package Python: paths, config, data/
 ├── scripts/          # tải, chuẩn hóa, chia tập, kiểm tra dữ liệu
-├── tests/            # pytest
 ├── docs/             # tài liệu kỹ thuật cho nhóm
 ├── report/           # báo cáo, hình, bảng
 ├── notebooks/        # thử nghiệm nhanh
@@ -38,7 +37,6 @@ python scripts/prepare_data.py     # chuẩn hóa -> data/processed/<dataset>/25
 python scripts/make_splits.py      # chia 80/10/10 theo FCBFormer -> data/splits/
 python scripts/check_data.py       # kiểm tra + thống kê -> report/
 python scripts/analyze_artifacts.py   # khung, ô ScopeGuide, phản xạ, màu -> report/ (mục 7.7)
-pytest -q
 ```
 
 Tiền xử lý ảnh (tùy chọn, mặc định tắt để giữ giao thức FCBFormer):
@@ -112,8 +110,6 @@ Tóm tắt nhanh:
 - `frame_adjacency`: với CVC (tên ảnh là số thứ tự khung hình), 96.7% ảnh val và 91.8% ảnh test có khung hình kề (±1) nằm trong train → xác nhận rò rỉ, val CVC cũng không đáng tin để chọn checkpoint → `report/tables/frame_adjacency.csv`.
 - Cờ `--manifest-only` để tính các bảng trên chỉ từ manifest, không cần tải ảnh.
 
-**Kiểm thử** — [tests/test_segformer.py](tests/test_segformer.py) (14 test): cấu hình giữ đúng siêu tham số gốc, kích thước đầu ra từng tầng, số tham số, tên khóa decoder khớp mmseg, `to_binary_logits` đúng bằng softmax lớp tổn thương, param group / LR / loss / metric / trainer, và chạy chính file `mix_transformer.py` gốc (thay mmcv/timm bằng stub) để so `state_dict` và đầu ra số học (sai khác < 1e-5).
-
 ### 2. `6cfd19e` — Plan
 
 Thêm [docs/segformer_plan.md](docs/segformer_plan.md) và mục **Huấn luyện** ở trên. Tài liệu gồm:
@@ -146,8 +142,6 @@ Thêm [docs/segformer_plan.md](docs/segformer_plan.md) và mục **Huấn luyệ
 - [scripts/convert_hf_mit.py](scripts/convert_hf_mit.py): tải `nvidia/mit-b2` từ Hugging Face (cùng checkpoint ImageNet-1K với bản gốc), đổi tên khóa về kiểu `mix_transformer.py`, ghép `key` + `value` thành `attn.kv`, kiểm tra khớp toàn bộ backbone rồi ghi `pretrained/mit_b2.pth`. Không còn phải tải thủ công từ Google Drive/OneDrive.
 - [scripts/build_kaggle.py](scripts/build_kaggle.py): đóng gói code, cấu hình, file chia tập, metadata và `mit_b2.pth` thành `Kaggle/medseg-code/` + file zip để upload làm Kaggle Dataset (ảnh không đóng gói; notebook lấy dữ liệu từ dataset có sẵn trên Kaggle rồi chạy `prepare_data.py`).
 - `.gitignore` chặn `pretrained/`, `base/*`, `Kaggle/*`.
-
-**Kiểm thử** — [tests/test_preprocess.py](tests/test_preprocess.py) (13 test): khung được tô về 0, phát hiện ô ScopeGuide đen và xanh, lòng ruột tối không bị nhận nhầm là ô, phản xạ nhỏ bị xóa còn vùng sáng lớn được giữ, chuẩn hóa màu đạt đích và giữ màu trắng trung tính, preset `none` không đổi ảnh, preset trong cấu hình hợp lệ, thư mục theo preset đúng; thêm các ca trên ảnh thật (tự bỏ qua nếu chưa tải dữ liệu). Toàn bộ `pytest -q` theo report: 45 đạt, 1 bỏ qua.
 
 **Tài liệu cập nhật:** [docs/data_pipeline.md](docs/data_pipeline.md) mục 3.1, [data/README.md](data/README.md) (cấu trúc thư mục theo preset), [report/report.md](report/report.md) mục 7.7.
 

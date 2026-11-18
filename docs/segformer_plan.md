@@ -18,7 +18,7 @@ Code gốc phụ thuộc mmcv-full 1.2.x và mmseg cũ, không cài được v�
 | mmcv `IterBasedRunner`, checkpoint/eval hook | `src/medseg/training/trainer.py` |
 | `local_configs/segformer/B2/segformer.b2.512x512.ade.160k.py` | `configs/config.json`, mục `segformer_b2` |
 
-Kiểm chứng: `tests/test_segformer.py` chạy chính file `mix_transformer.py` gốc (thay mmcv/timm bằng stub), so từng khóa của `state_dict` và đầu ra số học của backbone (sai khác < 1e-5). Vì tên khóa trùng khớp, `mit_b2.pth` gốc nạp thẳng vào được.
+Tên khóa của `state_dict` trùng khớp với `mix_transformer.py` gốc, nên `mit_b2.pth` gốc nạp thẳng vào được.
 
 ## 2. Giai đoạn 1 (hiện tại): giữ nguyên siêu tham số gốc
 
@@ -81,5 +81,4 @@ python scripts/train_segformer.py --dataset cvc_clinicdb           # E3
 python scripts/train_segformer.py --max-iters 200                  # đo tốc độ
 python scripts/train_segformer.py --resume outputs/segformer_b2/kvasir_seg/latest.pth
 python scripts/train_segformer.py --eval-only outputs/segformer_b2/kvasir_seg/best.pth
-pytest -q tests/test_segformer.py
 ```

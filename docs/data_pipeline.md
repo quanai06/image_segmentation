@@ -112,7 +112,7 @@ Quy ước chung cho mọi mô hình: nhận `(B, 3, 256, 256)`, trả logits `(
 
 Tập train mặc định có shuffle và `drop_last=True`; val/test không shuffle. Seed của DataLoader lấy từ `configs/data.yaml` (`loader.seed`).
 
-**Tái lập augmentation:** albumentations 2.x không dùng seed toàn cục của NumPy/PyTorch. Repo tự seed bộ biến đổi của từng worker từ seed của DataLoader (`_seed_worker`), nên cùng seed thì ra cùng batch, còn các worker khác nhau thì không bị trùng augmentation (`tests/test_dataloader.py`).
+**Tái lập augmentation:** albumentations 2.x không dùng seed toàn cục của NumPy/PyTorch. Repo tự seed bộ biến đổi của từng worker từ seed của DataLoader (`_seed_worker`), nên cùng seed thì ra cùng batch, còn các worker khác nhau thì không bị trùng augmentation.
 
 **Số worker:** DataLoader dùng `persistent_workers=True`, nên worker chỉ khởi động một lần. Đo trên MacBook (CPU), một epoch train Kvasir-SEG (800 ảnh): 2.4s với 0 worker, 1.3s với 2 worker, 0.7s với 4 worker (không tính epoch đầu khởi động worker). Trên macOS, code tạo DataLoader có worker phải nằm trong file `.py` có `if __name__ == "__main__":`.
 

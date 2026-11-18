@@ -84,6 +84,12 @@ def train(model: torch.nn.Module, train_loader, val_loader, cfg: dict, work_dir:
     log_path = work_dir / "log.jsonl"
     key = runner.get("eval_metric", "mIoU")
     best = {"metric": key, "score": float("-inf"), "iter": None}
+    if resume and (work_dir / "best.pth").exists():
+        # giữ mức tốt nhất của các phiên trước, nếu không lần val đầu sau resume (> -inf) sẽ ghi đè best.pth
+        prev = torch.load(work_dir / "best.pth", map_location="cpu", weights_only=False).get("meta", {})
+        if prev.get("metric") == key and prev.get("iter") is not None and prev["iter"] <= start:
+            best = prev
+            log(f"resume: giữ best.pth cũ ({key} {best['score']:.4f} tại iter {best['iter']})")
     data = infinite_loader(train_loader)
     window_loss, t0 = [], time.time()
 
