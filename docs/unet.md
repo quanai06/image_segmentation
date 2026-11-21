@@ -1,5 +1,8 @@
 # U-Net tự cài đặt
 
+Kết quả sau huấn luyện và điều kiện dự đoán đúng/sai được giải thích trong
+[phân tích lỗi hai mô hình](unet_error_analysis.md).
+
 Mô hình nằm ở `src/medseg/models/unet.py`, chỉ dùng các lớp cơ bản của
 PyTorch, không dùng mô hình segmentation có sẵn hoặc trọng số pretrained.
 
