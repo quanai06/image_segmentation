@@ -72,6 +72,29 @@ python scripts/train_segformer.py   # SegFormer-B2, cần pretrained/mit_b2.pth
 
 Kế hoạch và đối chiếu với code gốc: [docs/segformer_plan.md](docs/segformer_plan.md)
 
+## Phân tích lỗi theo diện tích polyp
+
+`results.json` cộng dồn pixel trên cả tập nên bị polyp lớn chi phối. `scripts/analyze_errors.py` tính lại metric theo từng ảnh và chia theo diện tích polyp: **nhỏ** < 5% (cùng ngưỡng với mục 7.2 của báo cáo), **vừa** 5–15%, **lớn** ≥ 15% diện tích ảnh. Kết quả cho biết nhóm ảnh nào hay sai, sai kiểu gì và lệch diện tích bao nhiêu.
+
+```bash
+python scripts/analyze_errors.py --ckpt outputs/segformer_b2/kvasir_seg/best.pth   # dự đoán + phân tích (CPU chạy được)
+python scripts/analyze_errors.py --work-dir outputs/segformer_b2/kvasir_seg         # phân tích lại từ mặt nạ đã dự đoán
+python scripts/analyze_errors.py --work-dir ... --bins 0.03 0.10 --to-report        # đổi ngưỡng; chép hình sang report/
+```
+
+Kết quả nằm ở `<work-dir>/analysis/`:
+
+| File | Nội dung |
+|---|---|
+| `perf_by_size.png` | Theo nhóm diện tích: Dice từng ảnh (box + CI 95%), recall, precision, tỷ lệ diện tích dự đoán / thật, HD95, % ảnh hỏng (Dice < 0.5) và % bỏ sót |
+| `dice_vs_area.png` | Dice và lệch diện tích theo diện tích polyp liên tục (trục log), đường trung vị |
+| `error_types.png` | Cơ cấu kiểu lỗi theo nhóm diện tích: tốt / thiếu vùng / lấn biên / báo nhầm (FP tách rời polyp) / bỏ sót |
+| `error_factors.png` | Dice theo đặc điểm dữ liệu: nhiều polyp, polyp sát mép FOV, tương phản màu polyp/nền (ΔE), phản xạ sáng, độ sáng ảnh, ô ScopeGuide; kèm % polyp nhỏ trong từng nhóm để nhận ra khi nào khác biệt thực ra do kích thước |
+| `worst_<dataset>.png` | Các ảnh Dice thấp nhất, tô TP / FP / FN |
+| `per_image.csv`, `size_bins.csv`, `factors.csv`, `worst_cases.csv`, `summary.md` | Số liệu từng ảnh, từng nhóm, bảng markdown để dán vào báo cáo |
+
+Notebook Kaggle chạy bước này ngay sau khi train (ô 4b). Mặt nạ dự đoán `analysis/pred/` chỉ vài MB, tải về máy là phân tích lại được. Bước phân tích không phụ thuộc mô hình: U-Net chỉ cần ghi mặt nạ 0/255 vào `analysis/pred/<dataset>/<tên>.png` là dùng chung được.
+
 ## Tiến độ: 3 commit gần nhất
 
 Tóm tắt nhanh:
