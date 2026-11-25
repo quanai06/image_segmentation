@@ -18,3 +18,5 @@ outputs/*
 !outputs/.gitkeep
 *.pt
 *.pth
+
+Kaggle/*
