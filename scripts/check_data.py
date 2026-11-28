@@ -30,6 +30,9 @@ from medseg.config import load_data_config, load_dataset_specs  # noqa: E402
 from medseg.data.dataset import SegmentationDataset, processed_root  # noqa: E402
 from medseg.data.splits import load_split  # noqa: E402
 from medseg.paths import DATA, REPORT, to_root  # noqa: E402
+from medseg.utils.logging import get_logger, setup_logging  # noqa: E402
+
+log = get_logger()
 
 FIG = REPORT / "figures"
 TAB = REPORT / "tables"
@@ -155,27 +158,28 @@ def main() -> None:
     parser.add_argument("--datasets", nargs="+", default=list(specs), choices=list(specs))
     parser.add_argument("--size", type=int, default=cfg["image_size"])
     args = parser.parse_args()
+    setup_logging("check_data", args)
     FIG.mkdir(parents=True, exist_ok=True)
     TAB.mkdir(parents=True, exist_ok=True)
 
     all_stats, dup_rows, manifests = [], [], {}
     fig, ax = plt.subplots(1, 2, figsize=(10, 3.4))
     for name in args.datasets:
-        print(f"[{name}]")
+        log.info(f"[{name}]")
         parts = check_splits(name)
-        print(f"  chia tập hợp lệ: " + ", ".join(f"{s}={len(parts[s])}" for s in SPLITS))
+        log.info(f"  chia tập hợp lệ: " + ", ".join(f"{s}={len(parts[s])}" for s in SPLITS))
         check_files(name, args.size, parts["all"])
-        print(f"  {len(parts['all'])} cặp ảnh/mặt nạ {args.size}x{args.size}, mặt nạ nhị phân")
+        log.info(f"  {len(parts['all'])} cặp ảnh/mặt nạ {args.size}x{args.size}, mặt nạ nhị phân")
         manifest = pd.read_csv(DATA / "metadata" / f"{name}_manifest.csv", dtype={"name": str})
         manifests[name] = manifest
         all_stats.append(split_stats(name, parts, manifest))
         dup = near_duplicates(name, args.size, parts)
         best = dup.pop("_best")
         dup_rows.append(dup)
-        print(f"  ảnh test có ảnh train tương quan >= 0.95: {dup['pct_corr_ge_0.95']:.1f}%")
+        log.info(f"  ảnh test có ảnh train tương quan >= 0.95: {dup['pct_corr_ge_0.95']:.1f}%")
         ax[1].hist(best, bins=40, alpha=0.6, label=name)
         ax[0].hist(manifest["fg_ratio_orig"], bins=40, alpha=0.6, label=name)
-        print("  hình:", to_root(plot_samples(name, args.size, parts)), to_root(plot_augment(name, args.size)))
+        log.info(f"  hình: {to_root(plot_samples(name, args.size, parts))}, {to_root(plot_augment(name, args.size))}")
 
     ax[0].set_xlabel("tỷ lệ diện tích tổn thương")
     ax[0].set_ylabel("số ảnh")
@@ -196,9 +200,9 @@ def main() -> None:
         m.assign(dataset=n)[["dataset", "orig_width", "orig_height"]] for n, m in manifests.items()
     ]).groupby("dataset").agg(["min", "median", "max"])
     sizes.to_csv(TAB / "image_sizes.csv")
-    print("\n" + stats.to_string(index=False))
-    print("\n" + dups.to_string(index=False))
-    print("\nĐã ghi report/tables/ và report/figures/")
+    log.info("\n" + stats.to_string(index=False))
+    log.info("\n" + dups.to_string(index=False))
+    log.info("\nĐã ghi report/tables/ và report/figures/")
 
 
 if __name__ == "__main__":

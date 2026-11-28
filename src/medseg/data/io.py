@@ -53,8 +53,13 @@ def read_mask(path: str | Path, threshold: int = 127) -> np.ndarray:
     return (m > threshold).astype(np.uint8)
 
 
-def resize_pair(image: np.ndarray, mask: np.ndarray, size: int) -> tuple[np.ndarray, np.ndarray]:
-    """Resize ảnh (INTER_AREA) và mặt nạ (INTER_AREA rồi ngưỡng 0.5) về size x size."""
-    img = cv2.resize(image, (size, size), interpolation=cv2.INTER_AREA)
+def resize_mask(mask: np.ndarray, size: int) -> np.ndarray:
+    """Resize mặt nạ 0/1 về size x size: INTER_AREA rồi ngưỡng 0.5."""
     m = cv2.resize(mask.astype(np.float32), (size, size), interpolation=cv2.INTER_AREA)
-    return img, (m >= 0.5).astype(np.uint8)
+    return (m >= 0.5).astype(np.uint8)
+
+
+def resize_pair(image: np.ndarray, mask: np.ndarray, size: int) -> tuple[np.ndarray, np.ndarray]:
+    """Resize ảnh (INTER_AREA) và mặt nạ về size x size."""
+    img = cv2.resize(image, (size, size), interpolation=cv2.INTER_AREA)
+    return img, resize_mask(mask, size)

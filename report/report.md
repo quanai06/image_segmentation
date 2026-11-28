@@ -110,6 +110,7 @@ Tỷ lệ diện tích tổn thương (theo ảnh gốc). "Nhỏ" là tổn thư
 Nhận xét:
 - Polyp trong CVC-ClinicDB nhỏ hơn rõ rệt: trung vị 6.8% diện tích ảnh so với 11.4% ở Kvasir-SEG, và 37% số ảnh có tổn thương nhỏ (Kvasir: 20%). Đây là một nguồn khó khi chuyển miền từ Kvasir sang CVC.
 - Phân bố giữa train/val/test trong cùng một bộ tương đối đồng đều; tập val của CVC gần như không có ảnh nhiều tổn thương (1/61), nên chỉ số trên val CVC có thể lệch.
+- **Cột "% nhiều tổn thương" bị thổi phồng bởi chấm nhiễu.** Mặt nạ JPEG của Kvasir sau khi nhị phân hóa còn các chấm vài pixel. Chỉ tính các vùng từ 0.1% diện tích ảnh trở lên thì tỷ lệ ảnh thực sự có nhiều tổn thương là 4.8% (Kvasir-SEG) và 4.9% (CVC-ClinicDB), thay vì 18.0% và 8.7%. Phần SAM lọc các chấm này trước khi sinh gợi ý (xem `docs/sam.md`).
 
 Toàn bộ số liệu: `report/tables/split_stats.csv`, `report/tables/image_sizes.csv`.
 
@@ -149,7 +150,34 @@ Hệ quả cho nhóm:
 3. **Chia tập theo video cho CVC-ClinicDB.** Để có tập test CVC không rò rỉ, cần bảng ánh xạ khung hình sang 31 video gốc rồi chia theo video. Đề xuất làm sau nếu nhóm cần kết quả train/test trong CVC đáng tin.
 4. **Một số ảnh Kvasir-SEG có ô hiển thị của máy nội soi** (ô đen hoặc xanh ở góc dưới bên trái, chữ chú thích). Hiện giữ nguyên như paper nền; khi phân tích lỗi nên để ý mô hình có bị ô này đánh lừa không.
 
-## 9. Tái lập
+## 9. Baseline SAM zero-shot (vit_b, tập test)
+
+SAM ViT-B nguyên bản, không train lại; gợi ý sinh từ nhãn; chạy trên ảnh gốc, chấm trên lưới 256 x 256. Chạy trên GPU Mac (MPS), khoảng 2.8 s/ảnh. Chi tiết thiết kế: `docs/sam.md`. Chưa chạy: P0 (không gợi ý) và vit_h (để chạy trên Colab).
+
+| Kiểu gợi ý | Kvasir-SEG (n=100) | CVC-ClinicDB (n=61) |
+|---|---|---|
+| 1 điểm tâm, SAM tự chọn mặt nạ (`point_top`) | 0.521 ± 0.362 | 0.425 ± 0.350 |
+| 1 điểm tâm, chọn bằng nhãn (`point_oracle`) | 0.847 ± 0.177 | 0.780 ± 0.241 |
+| 3 điểm dương + 3 điểm âm (`points`) | 0.826 ± 0.166 | 0.798 ± 0.198 |
+| Hộp lệch tối đa 20 px (`box_jitter_px`) | 0.905 ± 0.124 | 0.829 ± 0.189 |
+| Hộp lệch tối đa 10% (`box_jitter_rel`) | 0.890 ± 0.130 | 0.891 ± 0.150 |
+| Hộp chính xác (`box`) | 0.906 ± 0.148 | 0.898 ± 0.150 |
+
+Dice trung bình ± độ lệch chuẩn. Bảng đầy đủ (IoU, precision, recall, HD95): `report/tables/sam_zeroshot.csv`.
+
+Quan sát ban đầu:
+1. **Với một điểm, SAM có mặt nạ đúng nhưng chọn sai.** Cùng một điểm, nếu chọn mặt nạ bằng nhãn thì Dice tăng từ 0.52 lên 0.85 (Kvasir). Một trong 3 mặt nạ SAM sinh ra thường đã đúng, nhưng điểm IoU SAM tự dự đoán lại ưu tiên mặt nạ khác, thường là vùng lớn hơn polyp (precision chỉ 0.46–0.65, recall 0.78–0.88).
+2. **Gợi ý càng định vị rõ, SAM càng gần mô hình chuyên biệt:** hộp chính xác đạt khoảng 0.90 Dice trên cả hai bộ. Điều này ủng hộ giả thuyết H3: điểm yếu chính của SAM là định vị và chọn mặt nạ, chưa hẳn là vẽ đường biên.
+3. **Hộp thất bại với polyp rất lớn.** Ba ca tệ nhất của Kvasir với gợi ý hộp là polyp chiếm 43%, 67% và 72% diện tích ảnh (Dice 0.00, 0.37, 0.02): hộp gần trùm cả khung hình, và SAM tô vùng viền đen ngoài khung nội soi thay vì tô polyp. Vì vậy nhóm polyp lớn có Dice hộp thấp hơn nhóm vừa (Kvasir: 0.849 so với 0.940).
+4. **Polyp nhỏ trên CVC nhạy với độ lệch của hộp:** Dice giảm từ 0.868 (hộp chính xác) xuống 0.770 khi lệch tối đa 20 px, vì 20 px là rất lớn so với một polyp nhỏ trong ảnh 384 x 288.
+
+Đối chiếu tài liệu (chỉ để kiểm tra mức hợp lý, không so trực tiếp): Polyp SAM 2 báo SAM với hộp đạt mDice 0.855 trên toàn bộ Kvasir-SEG và 0.906 trên toàn bộ CVC-ClinicDB, cùng khoảng với kết quả ở đây. Họ dùng điểm ngẫu nhiên, đánh giá trên toàn bộ dữ liệu và không nêu rõ kích thước mô hình, nên các con số không so sánh trực tiếp được. Nhóm polyp lớn của CVC chỉ có 4 ảnh, nên kết luận theo nhóm này chưa chắc chắn.
+
+![Bậc thang gợi ý](figures/sam_prompt_ladder.png)
+
+![Ví dụ Kvasir-SEG](figures/sam_examples_kvasir_seg.png)
+
+## 10. Tái lập
 
 ```bash
 python -m venv .venv && source .venv/bin/activate

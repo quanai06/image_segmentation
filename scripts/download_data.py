@@ -6,11 +6,9 @@ Chạy từ gốc repo:
 """
 
 import argparse
-import hashlib
 import shutil
 import subprocess
 import sys
-import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -18,30 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from medseg.config import load_dataset_specs  # noqa: E402
 from medseg.paths import from_root  # noqa: E402
+from medseg.utils.download import download, sha256sum  # noqa: E402
+from medseg.utils.logging import get_logger, setup_logging  # noqa: E402
 
-
-def sha256sum(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def download(url: str, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
-        total = int(r.headers.get("Content-Length", 0))
-        done = 0
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
-            done += len(chunk)
-            if total:
-                print(f"\r  {done / 1e6:7.1f} / {total / 1e6:.1f} MB", end="", flush=True)
-    print()
-    tmp.rename(dest)
+log = get_logger()
 
 
 def extract(archive: Path, out_dir: Path) -> None:
@@ -68,25 +46,26 @@ def main() -> None:
     parser.add_argument("--datasets", nargs="+", default=list(specs), choices=list(specs))
     parser.add_argument("--force", action="store_true", help="tải và giải nén lại từ đầu")
     args = parser.parse_args()
+    setup_logging("download_data", args)
 
     for name in args.datasets:
         spec = specs[name]
         archive = from_root(spec["archive"])
-        print(f"[{name}]")
+        log.info(f"[{name}]")
         if args.force or not archive.exists():
-            print(f"  tải {spec['url']}")
+            log.info(f"  tải {spec['url']}")
             download(spec["url"], archive)
         digest = sha256sum(archive)
         if digest != spec["sha256"]:
             raise ValueError(f"  SHA-256 không khớp cho {archive.name}: {digest}")
-        print("  SHA-256 khớp")
+        log.info("  SHA-256 khớp")
 
         img_dir, msk_dir = from_root(spec["raw_images"]), from_root(spec["raw_masks"])
         if args.force or not (img_dir.exists() and msk_dir.exists()):
-            print(f"  giải nén vào {spec['extract_to']}")
+            log.info(f"  giải nén vào {spec['extract_to']}")
             extract(archive, from_root(spec["extract_to"]))
         n_img, n_msk = len(list(img_dir.iterdir())), len(list(msk_dir.iterdir()))
-        print(f"  {n_img} ảnh, {n_msk} mặt nạ")
+        log.info(f"  {n_img} ảnh, {n_msk} mặt nạ")
 
 
 if __name__ == "__main__":

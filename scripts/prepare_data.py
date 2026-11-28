@@ -25,6 +25,9 @@ from medseg.config import load_data_config, load_dataset_specs  # noqa: E402
 from medseg.data.dataset import processed_root  # noqa: E402
 from medseg.data.io import list_images, read_image, read_mask, resize_pair  # noqa: E402
 from medseg.paths import DATA, from_root, to_root  # noqa: E402
+from medseg.utils.logging import get_logger, setup_logging  # noqa: E402
+
+log = get_logger()
 
 
 def file_sha256(path: Path) -> str:
@@ -33,7 +36,8 @@ def file_sha256(path: Path) -> str:
 
 def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
     images = list_images(from_root(spec["raw_images"]))
-    masks = {p.stem: p for p in list_images(from_root(spec["raw_masks"]))}
+    prefix = spec.get("mask_prefix", "")  # vd ETIS: ảnh 1.tif <-> mặt nạ p1.tif
+    masks = {p.stem.removeprefix(prefix): p for p in list_images(from_root(spec["raw_masks"]))}
     missing = [p.stem for p in images if p.stem not in masks]
     if missing:
         raise ValueError(f"{name}: {len(missing)} ảnh không có mặt nạ, vd {missing[:3]}")
@@ -72,9 +76,9 @@ def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
         writer.writerows(rows)
 
     fg = np.array([r["fg_ratio_orig"] for r in rows])
-    print(f"  {len(rows)} mẫu -> {to_root(out)}")
-    print(f"  tỷ lệ tổn thương: min {fg.min():.4f}, trung vị {np.median(fg):.4f}, max {fg.max():.4f}")
-    print(f"  manifest: {to_root(meta)}")
+    log.info(f"  {len(rows)} mẫu -> {to_root(out)}")
+    log.info(f"  tỷ lệ tổn thương: min {fg.min():.4f}, trung vị {np.median(fg):.4f}, max {fg.max():.4f}")
+    log.info(f"  manifest: {to_root(meta)}")
 
 
 def main() -> None:
@@ -84,8 +88,9 @@ def main() -> None:
     parser.add_argument("--datasets", nargs="+", default=list(specs), choices=list(specs))
     parser.add_argument("--size", type=int, default=cfg["image_size"])
     args = parser.parse_args()
+    setup_logging("prepare_data", args)
     for name in args.datasets:
-        print(f"[{name}]")
+        log.info(f"[{name}]")
         prepare(name, specs[name], args.size, cfg["mask_threshold"])
 
 
