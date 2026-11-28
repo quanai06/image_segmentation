@@ -1,5 +1,7 @@
 # Phân đoạn ảnh y tế: U-Net vs Transformer
 
+U-Net tự cài đặt: xem [kiến trúc và cách sử dụng](docs/unet.md).
+
 Đề tài 2 — phân đoạn vùng tổn thương ở mức điểm ảnh, so sánh encoder–decoder kiểu CNN (U-Net) với kiến trúc dựa trên Transformer (SegFormer), đánh giá bằng Dice và IoU.
 
 Paper nền để tái tạo giao thức: **FCBFormer** — Sanderson & Matuszewski, *FCN-Transformer Feature Fusion for Polyp Segmentation*, MIUA 2022 ([arXiv](https://arxiv.org/abs/2208.08352), [code](https://github.com/ESandML/FCBFormer)).
