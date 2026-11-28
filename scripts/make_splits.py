@@ -32,11 +32,16 @@ def main() -> None:
 
     for name in args.datasets:
         spec = specs[name]
-        if spec["split"]["protocol"] != "fcbformer":
-            raise NotImplementedError(spec["split"]["protocol"])
+        protocol = spec["split"]["protocol"]
         names = [p.stem for p in list_images(from_root(spec["raw_images"]))]
-        parts = fcbformer_split(len(names), seed=spec["split"]["seed"])
         log.info(f"[{name}] {len(names)} mẫu")
+        if protocol == "test_only":  # tập chỉ để test chuyển miền
+            path = write_split(name, "all", names)
+            log.info(f"  all   {len(names):4d} -> {to_root(path)}")
+            continue
+        if protocol != "fcbformer":
+            raise NotImplementedError(protocol)
+        parts = fcbformer_split(len(names), seed=spec["split"]["seed"])
         for split, ids in parts.items():
             path = write_split(name, split, sorted(names[i] for i in ids))
             log.info(f"  {split:5s} {len(ids):4d} -> {to_root(path)}")

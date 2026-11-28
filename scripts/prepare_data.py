@@ -36,7 +36,8 @@ def file_sha256(path: Path) -> str:
 
 def prepare(name: str, spec: dict, size: int, threshold: int) -> None:
     images = list_images(from_root(spec["raw_images"]))
-    masks = {p.stem: p for p in list_images(from_root(spec["raw_masks"]))}
+    prefix = spec.get("mask_prefix", "")  # vd ETIS: ảnh 1.tif <-> mặt nạ p1.tif
+    masks = {p.stem.removeprefix(prefix): p for p in list_images(from_root(spec["raw_masks"]))}
     missing = [p.stem for p in images if p.stem not in masks]
     if missing:
         raise ValueError(f"{name}: {len(missing)} ảnh không có mặt nạ, vd {missing[:3]}")
